@@ -1,0 +1,96 @@
+use std::evm
+use std::buf::{
+    MemoryBuffer, 
+    RawCallBuffer,
+    MemoryBufferWriter,
+    MemoryBufferReader
+}
+use helper::avail
+
+struct ETH_TRANSFER_FAILED{}
+struct ERC20_TRANSFER_FROM_FAILED{}
+struct ERC20_TRANSFER_FAILED{}
+struct SAFE_TRANSFER_FAILED{}
+struct APPROVE_FAILED{}
+
+pub fn safe_transfer_eth(to: address, value: u256) {
+    let mut buf: RawCallBuffer = RawCallBuffer::new(input_len: 0, output_len: 1)
+    let success: u8;
+    unsafe {
+        evm::call(gas: evm::gas_remaining(), addr: to, value, buf) 
+    }
+    if success == 0 {
+        revert ETH_TRANSFER_FAILED()
+    }
+}
+
+pub fn safe_transfer_from(token: address, from: address, to: address, amount: u256) {
+    unsafe {
+        let mem_ptr: u256 = avail()
+        evm::mstore(offset: 12, value: 0x0000000000000000000000000000000023b872dd000000000000000000000000)
+        evm::mstore(offset: 44, value: u256(from) << 96)
+        evm::mstore(offset: 64, value: u256(to))
+        evm::mstore(offset: 96, value: amount)
+        let success: bool = evm::call_2(
+            gas: evm::gas_remaining(),
+            addr: token,
+            value: 0,
+            input_offset: 28,
+            input_len: 100,
+            output_offset: 0,
+            output_len: 32
+        )
+        let return_data: u256 = evm::mload(offset: 0)
+        let return_data_size: u256 = evm::return_data_size()
+        if not ((return_data == 1 or return_data_size == 0) and success) {
+            revert SAFE_TRANSFER_FAILED()
+        }
+    }
+}
+
+fn safe_transfer(token: address, to: address, amount: u256) {
+    unsafe {
+        evm::mstore(offset: 0, value: 0x00000000000000000000000000000000a9059cbb000000000000000000000000)
+        evm::mstore(offset: 20, value: u256(to))
+        evm::mstore(offset: 52, value: amount)
+
+        let success: bool = evm::call_2(
+            gas: evm::gas_remaining(),
+            addr: token,
+            value: 0,
+            input_offset: 16,
+            input_len: 68,
+            output_offset: 0,
+            output_len: 32
+        )
+        let return_data: u256 = evm::mload(offset: 0)
+        let return_data_size: u256 = evm::return_data_size()
+        if not ((return_data == 1 or return_data_size == 0) and success) {
+            revert SAFE_TRANSFER_FAILED()
+        }
+    }
+}
+
+fn safe_approve(token: address, to: address, amount: u256) {
+    unsafe {
+        evm::mstore(offset:  0, value: 0x00000000000000000000000000000000095ea7b3000000000000000000000000)
+        evm::mstore(offset: 20, value: u256(to))
+        evm::mstore(offset: 52, value: amount)
+
+        let success: bool = evm::call_2(
+            gas: evm::gas_remaining(),
+            addr: token,
+            value: 0,
+            input_offset: 16,
+            input_len: 68,
+            output_offset: 0,
+            output_len: 32
+        ) 
+        
+        let return_data: u256 = evm::mload(offset: 0)
+        let return_data_size: u256 = evm::return_data_size()
+        if not ((return_data == 1 or return_data_size == 0) and success) {
+            revert APPROVE_FAILED()
+        }
+    }
+}

@@ -1,0 +1,10 @@
+pub fn safe_add(a: u256, b: u256) -> u256 {
+    let c: u256 = a + b
+    assert(c >= a)
+    return c
+}
+
+pub fn safe_sub(a: u256, b: u256) -> u256 {
+    assert(b <= a)
+    return a - b
+}

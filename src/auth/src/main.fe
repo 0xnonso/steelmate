@@ -1,7 +1,17 @@
 // Import `get_42` from the utils module and rename it to `get_42_util`.
 use utils::get_42 as get_42_util
-
+use std::evm
+struct Code {
+    pub size: u256
+}
 contract Main {
+    num: u256
+    pub fn __init__(mut self, mut ctx: Context, _num: u256) {
+        unsafe {
+            ctx.emit(Code(size: evm::code_size()))
+        }
+    }
+
     pub fn get_42(self) -> u256 {
         return get_42_util()
     }

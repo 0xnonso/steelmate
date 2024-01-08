@@ -1,0 +1,84 @@
+use std::buf::{
+    MemoryBuffer, 
+    RawCallBuffer,
+    MemoryBufferWriter,
+    MemoryBufferReader
+}
+use std::evm
+use utils::helper::{
+    get_bytes,
+    store_bytes
+}
+use utils::math::safe_math::{
+    safe_add as add,
+    safe_sub as sub
+}
+
+struct Approval {
+    #indexed
+    pub owner: address
+    #indexed
+    pub spender: address
+    pub amount: u256
+}
+
+struct Transfer {
+    #indexed
+    pub from: address
+    #indexed
+    pub to: address
+    pub amount: u256
+}
+
+pub contract ERC20 {
+    name: String<29>
+    symbol: String<6>
+    decimals: u8
+    balance_of: Map<address, u256>
+    allowance: Map<address, Map<address, u256>>
+    initial_chain_id: u256
+    initial_domain_seperator: u256
+    nonces: Map<address, u256>
+
+    pub fn __init__(mut self, mut ctx: Context, name: String<29>, symbol: String<6>, decimals: u8) {
+        self.name = name
+        self.symbol = symbol
+        self.decimals = decimals
+        self.initial_chain_id = ctx.chain_id()
+        self.initial_domain_seperator = self.compute_domain_seperator()
+    }
+
+    pub fn approve(mut self, mut ctx: Context, spender: address, amount: u256) -> bool {
+        self.allowance[ctx.msg_sender()][spender] = amount
+        ctx.emit(Approval(owner: ctx.msg_sender(), spender, amount))
+        return true
+    }
+
+    pub fn transfer(mut self, mut ctx: Context, to: address, amount: u256) -> bool {
+        self._transfer(ctx, from: ctx.msg_sender() to, amount)
+    }
+
+    pub fn transfer_from(_from: address, _to: address, _amount: u256) -> bool {}
+
+    pub fn permit(
+        _owner: address,
+        _spender: address,
+        _value: u256,
+        _deadline: u256,
+        _v: u8,
+        _r: u256,
+        _s: u256
+    ) {}
+
+    pub fn domain_seperator() -> u256 {}
+    fn compute_domain_seperator() -> u256 {}
+    pub fn name() -> MemoryBuffer {}
+    pub fn symbol() -> MemoryBuffer {}
+
+    fn _transfer(mut self, mut ctx: Context, from: address, to: address, amount: u256) -> bool {
+        self.balance_of[from] = sub(a: self.balance_of[from], b: amount)
+        self.balance_of[to] += amount
+        ctx.emit(Transfer(from , to, amount))
+        return true
+    }
+}

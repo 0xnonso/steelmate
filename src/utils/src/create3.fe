@@ -1,0 +1,72 @@
+use std::evm
+use std::buf::{
+    MemoryBuffer, 
+    RawCallBuffer,
+    MemoryBufferWriter,
+    MemoryBufferReader
+}
+
+const ADDR_MASK: u256 = 0x00
+const PROXY_BYTECODE: u256 = 0x67363d3d37363d34f03d5260086018f3 //16
+const PROXY_BYTECODE_HASH:u256 = 0x21c35dbe1b344a2488cf3321d6ce542f8e9f305544ff09e4993a62319a497c1f
+
+struct INITIALIZATION_FAILED {}
+struct PROXY_DEPLOYMENT_FAILED {}
+
+fn deploy(mut ctx: Context,salt: u256, mut creation_code: MemoryBuffer, value: u256) -> address {
+    // 
+    let creation_code_len: u256 = creation_code.len()
+    let mut creation_code_buf: RawCallBuffer = RawCallBuffer::new(input_len: creation_code_len, output_len: 1)
+    let mut creation_code_writer: MemoryBufferWriter = creation_code_buf.writer()
+    creation_code_writer.write_buf(buf: creation_code)
+
+
+    let mut buf: MemoryBuffer = MemoryBuffer::new(len: 16)
+    let mut writer: MemoryBufferWriter = buf.writer()
+    writer.write(value: 0x67363d3d37363d34f03d5260086018f300000000000000000000000000000000)
+
+    let mut proxy: address
+    unsafe {
+        proxy = evm::create2(value, buf, salt)
+    }
+    if proxy == address(0) {
+        revert PROXY_DEPLOYMENT_FAILED()
+    }
+    let mut deployed: address = get_deployed(salt, creator: ctx.self_address())
+    let mut success: bool
+    let mut deployed_code_len: u256 
+    unsafe {
+        success = evm::call(gas: evm::gas_remaining(), addr: proxy, value, buf: creation_code_buf)
+        deployed_code_len = evm::extcodesize(deployed)
+    }
+    if not success and deployed_code_len == 0 {
+        revert INITIALIZATION_FAILED()
+    }
+    return deployed
+}
+
+fn get_deployed(salt: u256, creator: address) -> address {
+    let mut buf1: MemoryBuffer = MemoryBuffer::new(len: 85)
+    let mut writer1: MemoryBufferWriter = buf1.writer()
+
+    writer1.write(value: 0xff00000000000000000000000000000000000000000000000000000000000000 | u256(creator) << 88 | salt >> 168)
+    writer1.write(value: salt << 88 | PROXY_BYTECODE_HASH >> 88)
+    writer1.write(value: PROXY_BYTECODE_HASH << 168)
+    let mut hash1: u256
+    unsafe {
+        hash1 = evm::keccak256_mem(buf: buf1)
+    }
+    
+    let mut buf2: MemoryBuffer = MemoryBuffer::new(len: 23)
+    let mut writer2: MemoryBufferWriter = buf2.writer()
+    writer2.write( value:
+        0xd694000000000000000000000000000000000000000000000000000000000000 
+        | (hash1 & ADDR_MASK) << 80
+        | 0x0000000000000000000000000000000000000000000001000000000000000000
+    )
+    let mut hash2: u256
+    unsafe {
+        hash2 = evm::keccak256_mem(buf: buf2)
+    }
+    return address(hash2 & ADDR_MASK)
+}

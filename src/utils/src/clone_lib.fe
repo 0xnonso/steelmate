@@ -1,0 +1,189 @@
+use std::evm
+use std::buf::{
+    MemoryBuffer, 
+    RawCallBuffer,
+    MemoryBufferWriter,
+    MemoryBufferReader
+}
+
+struct CloneDeploymentFailed {}
+
+
+pub fn clone(value: u256, implementation: address) -> address {
+    let mut buf: MemoryBuffer = MemoryBuffer::new(len: 55)
+    let mut writer: MemoryBufferWriter = buf.writer()
+          
+          // 0x00000000000000000000000000000000005af43d82803e903d91602b57fd5bf3
+          // 0x610567689da4f1dc6ffe1c0eec56511dd2000000000000000000000000000000
+          // 0x0000000000000000000000000000000000000000000000000000000000110ead
+          // 0x0000000000000000003d602d80600a3d3981f3363d3d373d3d3d363d73000000
+// 3d602d80600a3d3981f3363d3d373d3d3d363d73110ead610567689da4f1dc6ffe1c0eec56511dd25af43d82803e903d91602b57fd5bf3
+// 3d602d80600a3d3981f3363d3d373d3d3d363d73110ead610567689da4f1dc6ffe1c0eec56511dd2 5af43d3d93803e602a57fd5bf3
+//                                                                                  0x5af43d82803e903d91602b57fd5bf3
+    //    0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000
+
+    //    0x0000000000000000000000000000000000000000110ead610567689da4f1dc6f
+    //    0xfe1c0eec56511dd2000000000000000000000000000000000000000000000000
+    //    0x00000000000000005af43d3d93803e602a57fd5bf30000000000000000000000
+          0x00000000000000005af43d82803e903d91602b57fd5bf3000000000000000000
+
+          // 0xfe1c0eec56511dd25af43d3d93803e602a57fd5bf30000000000000000000000
+
+    writer.write(value: 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000 | (u256(implementation) >> 64))
+    writer.write(value: u256(implementation) << 192 | 0x00000000000000005af43d82803e903d91602b57fd5bf3000000000000000000)
+    let mut instance: address
+    unsafe {
+        instance = evm::create(value, buf)
+    }
+    if instance == address(0) {
+        revert CloneDeploymentFailed()
+    }
+
+    return instance
+
+    //unsafe {           0x0000000000000000000000000000000023b872dd000000000000000000000000
+    //    evm::mstore(0, 0x602c3d8160093d39f33d3d3d3d363d3d37363d73000000000000000000000000)
+    //                     0000000000000000
+    //                     6A74b2B6D9c1075C
+    //                     5af43d3d93803e602a57fd5bf30000000000000000000000
+    //                                                                
+    //    evm::mstore(20, implementation)
+    //    evm::mstore(33, 0x5af43d3d93803e602a57fd5bf3)
+    //    let address = evm::create()
+    //}
+}
+
+pub fn clone_deterministic(value: u256, implementation: u256, salt: u256) -> address {
+    let mut buf: MemoryBuffer = MemoryBuffer::new(len: 55)
+    let mut writer: MemoryBufferWriter = buf.writer()
+
+    writer.write(value: 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000 | (u256(implementation) >> 64))
+    writer.write(value: u256(implementation) << 192 | 0x00000000000000005af43d82803e903d91602b57fd5bf3000000000000000000)
+    let mut instance: address
+    unsafe {
+        instance = evm::create2(value, buf, salt)
+    }
+    if instance == address(0) {
+        revert CloneDeploymentFailed()
+    }
+
+    return instance
+}
+
+pub fn clone_predict_deterministic_address(implementation: address, salt: u256, deployer: address) -> address {
+    let mut buf1: MemoryBuffer = MemoryBuffer::new(len: 55)
+    let mut writer1: MemoryBufferWriter = buf1.writer()
+    let mut buf2: MemoryBuffer = MemoryBuffer::new(len: 85)
+    let mut writer2: MemoryBufferWriter = buf2.writer()
+
+    // 0x3d373d3d3d363d73000000000000000000000000000000000000000000000000
+    // 0x00000000000000005af43d82803e903d91602b57fd5bf3000000000000000000
+
+    // 0x003d602d80600a3d3981f3363d3d373d3d3d363d730000000000000000000000
+    // 0xff00000000000000000000000000000000000000000000000000000000000000
+
+    // 0x110ead610567689da4f1dc6ffe1c0eec56511dd2000000000000000000000000
+    // 0x00000000000000000000000000000000000000005af43d82803e903d91602b57
+    // fd5bf3ff
+    // 0x00000000000000000000000000000000000000003d602d80600a3d3981f3363d
+    // 0x3d602d80600a3d3981f3363d3d373d3d3d363d73
+    // 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000
+
+    writer1.write(value: 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000 | u256(implementation) >> 64)
+    writer1.write(value: u256(implementation) << 192 | 0x00000000000000005af43d82803e903d91602b57fd5bf3000000000000000000)
+    let mut hash: u256 
+    unsafe {
+        hash = evm::keccak256_mem(buf: buf1)
+    }
+    writer2.write(value: 0xff00000000000000000000000000000000000000000000000000000000000000 | u256(deployer) << 88 | salt >> 168)
+    writer2.write(value: salt << 88 | hash >> 88)
+    writer2.write(value: hash << 168)
+    unsafe {
+        hash = evm::keccak256_mem(buf: buf2)
+    }
+    return address(hash)
+}
+
+pub fn clone_with_immutable_args(value: u256, implementation: address, data: MemoryBuffer) -> address {
+
+    let mut buf: MemoryBuffer = MemoryBuffer::new(len: 0x41 + data.len() + 2)
+    let mut buf_writer: MemoryBufferWriter = buf.writer()
+    let mut data_reader: MemoryBufferReader = data.reader()
+
+    let data_len: u256 = data.len()
+    let extra_length: u256 = data_len + 2
+    let creation_size: u256 = 0x41 + extra_length
+    let run_size: u256 = creation_size - 10
+    let mut word1: u256 = 0x6100000000000000000000000000000000000000000000000000000000000000 | run_size << 232
+    word1 = word1 | 0x0000003d81600a3d39f33d3d3d3d363d3d376100000000000000000000000000
+    word1 = word1 | extra_length << 88
+    word1 = word1 | 0x0000000000000000000000000000000000000000006037363936610000000000
+    word1 = word1 | extra_length << 24 | 0x0000000000000000000000000000000000000000000000000000000000013d73
+    let mut word2: u256 = u256(implementation) << 96 | 0x00000000000000000000000000000000000000005af43d3d93803e603557fd5b
+    // let mut word3: u256 = 0xf300000000000000000000000000000000000000000000000000000000000000 | data_reader.read_n(len: 31)
+    let mut word3: u8 = 0xf3
+
+    
+    // let mut word1 = 0x6100000000000000000000000000000000000000000000000000000000000000 
+    //                     | run_size << 232
+    //                     xxxx
+    //                 0x0000003d81600a3d39f33d3d3d3d363d3d376100000000000000000000000000
+    //                 0x00000000000000000000000000000000000000ff9e0000000000000000000000
+    //                                                         | extralength << 88
+    //                                                         xxxx
+    //                 0x0000000000000000000000000000000000000000006037363936610000000000
+    //                 0x000000000000000000000000000000000000000000000000000000ff9e000000
+    //                                                                         | extralength << 240
+    //                                                                         xxxx
+    //                 0x0000000000000000000000000000000000000000000000000000000000013d73
+    // let mut word2 = 0x110EaD610567689DA4f1Dc6Ffe1c0EeC56511DD2000000000000000000000000 // address of implementation
+    //                 0x00000000000000000000000000000000000000005af43d3d93803e603557fd5b
+    // let mut word3 = 0xf300000000000000000000000000000000000000000000000000000000000000
+    //                     x
+    //                     data.read_n(31)
+
+    buf_writer.write(value: word1)
+    buf_writer.write(value: word2)
+    buf_writer.write(value: word3)
+    buf_writer.write_buf(buf: data)
+    buf_writer.write(value: data_len)
+
+    // let mut i: u256 = data_reader.remainder()
+    // while i >= 32 {
+    //     buf_writer.write(value: data_reader.read_u256())
+    //     i =- 32
+    // }
+    
+    // let mask: u256 = ~(256 ** (32 - i) - 1);
+    // let mut data_rem: u256 = data_reader.read_u256()
+    // if i == 0 {
+    //     break
+    // } else if i == 31 {
+    //     buf_writer.write(value: data_rem & mask | data_len >> 8)
+    //     buf_writer.write(value: data_len << 248)
+    // } else {
+    //     buf_writer.write(value: data_rem & mask | data_len << (240 - (i * 8)))
+    // }
+
+    // while true {
+    //         let bytes_remaining: u256 = reader.remainder() 
+
+    //         if bytes_remaining >= 32 {
+    //             self.write(value: reader.read_u256())
+    //         } else if bytes_remaining == 0 {
+    //             break 
+    //         } else {
+    //             self.write(value: reader.read_u8())
+    //         }
+    //    }
+
+    let mut instance: address
+    unsafe {
+        instance = evm::create(value, buf)
+    }
+    if instance == address(0) {
+        revert CloneDeploymentFailed()
+    }
+
+    return instance
+}

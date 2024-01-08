@@ -1,0 +1,85 @@
+use std::buf::{
+    MemoryBuffer, 
+    RawCallBuffer,
+    MemoryBufferWriter,
+    MemoryBufferReader
+}
+use std::evm
+
+pub fn hash(value: u256, len: u256) -> u256 {
+    let mut key_buf: MemoryBuffer = MemoryBuffer::new(len)
+    let mut key_buf_writer: MemoryBufferWriter = key_buf.writer()
+    key_buf_writer.write(value)
+    return std::precompiles::sha2_256(buf: key_buf)
+}
+
+pub fn get_bytes(offset: u256) -> MemoryBuffer {
+    let mut bytes_value: u256 
+    unsafe {
+        bytes_value = evm::sload(offset)
+    }
+    let mut return_value: MemoryBuffer = MemoryBuffer::new(len: 0)
+    if bytes_value & 1 == 0 {
+        return_value = MemoryBuffer::new(len: (bytes_value & 0xFF) / 2 )
+        let mut return_value_writer: MemoryBufferWriter = return_value.writer()
+        return_value_writer.write(value: bytes_value & ~0xFF)
+    } else {
+        let bytes_value_len: u256 = (bytes_value - 1) / 2
+        let mut ret_word_len: u256 = bytes_value_len / 32
+        if bytes_value_len % 32 > 0 { 
+            ret_word_len += 1 
+        }
+        return_value = MemoryBuffer::new(len: bytes_value_len)
+        let mut return_value_writer: MemoryBufferWriter = return_value.writer()
+        let mut slot_offset: u256 = hash(value: offset, len: 32)
+        let mut i: u256 = 0
+        return_value_writer.write(value: bytes_value / 2)
+        while i <= ret_word_len {
+            let mut value: u256 = 0
+            unsafe {
+                value = evm::sload(offset: slot_offset + i)
+            }
+            return_value_writer.write(value)
+            i += 1
+        }
+    }
+    return return_value
+}
+
+pub fn store_bytes(offset: u256, bytes: MemoryBuffer) {
+    let mut bytes_reader: MemoryBufferReader = bytes.reader()
+    if bytes.len() > 31 {
+        let value: u256 = bytes_reader.read_u256() | bytes.len() * 2
+        unsafe {
+            evm::sstore(offset, value)
+        }
+    } else {
+        unsafe {
+            evm::sstore(offset, value: (bytes.len() * 2) + 1)
+        }
+        let mut slot_offset: u256 = hash(value: offset, len: 32)
+        let mut bytes_word_len: u256 = bytes.len() / 32
+        if bytes_word_len % 32 > 0 { 
+            bytes_word_len += 1 
+        }
+        let mut i: u256 = 0
+        while i < bytes_word_len {
+            unsafe {
+                evm::sstore(offset: slot_offset, value: bytes_reader.read_u256())
+            }
+            i += 1
+        }
+    }
+}
+
+pub fn avail() -> u256 {
+    let mut ptr: u256
+    unsafe {
+        ptr = evm::mload(offset: 64)
+    }
+    if ptr == 0x00 {
+        return 96
+    } else {
+        return ptr
+    }
+}

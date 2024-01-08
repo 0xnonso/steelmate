@@ -1,0 +1,13 @@
+use std::evm
+use std::buf::{
+    MemoryBuffer, 
+    RawCallBuffer,
+    MemoryBufferWriter,
+    MemoryBufferReader
+}
+
+fn encode(data: MemoryBuffer, file_safe: bool, no_padding: bool) -> MemoryBuffer {
+    unsafe {
+        
+    }
+}

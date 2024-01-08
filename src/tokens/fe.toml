@@ -1,0 +1,7 @@
+name = "tokens"
+version = "1.0"
+
+[dependencies]
+utils = { path = "../utils", version = "1.0" }
+# my_lib = "../my_lib"
+# my_lib = { path = "../my_lib", version = "1.0" }
